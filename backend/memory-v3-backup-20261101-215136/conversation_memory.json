@@ -1,0 +1,82 @@
+[
+  {
+    "role": "user",
+    "content": "Who is Sanu?"
+  },
+  {
+    "role": "assistant",
+    "content": "I don't have any information saved about Sanu."
+  },
+  {
+    "role": "user",
+    "content": "Who is Bahul?"
+  },
+  {
+    "role": "assistant",
+    "content": "Bahul - a developer"
+  },
+  {
+    "role": "user",
+    "content": "Who is Sanu?"
+  },
+  {
+    "role": "assistant",
+    "content": "I don't have any information saved about Sanu."
+  },
+  {
+    "role": "user",
+    "content": "Who are my friends?"
+  },
+  {
+    "role": "assistant",
+    "content": "People you've mentioned: Bahul - a developer."
+  },
+  {
+    "role": "user",
+    "content": "Remember that my friend Sanu is a designer"
+  },
+  {
+    "role": "assistant",
+    "content": "I already have this saved: Sanu - a designer."
+  },
+  {
+    "role": "user",
+    "content": "Who is Sanu?"
+  },
+  {
+    "role": "assistant",
+    "content": "Sanu - a designer"
+  },
+  {
+    "role": "user",
+    "content": "Who are my friends?"
+  },
+  {
+    "role": "assistant",
+    "content": "People you've mentioned: Bahul - a developer; Sanu - a designer."
+  },
+  {
+    "role": "user",
+    "content": "Update Sanu's role to developer"
+  },
+  {
+    "role": "assistant",
+    "content": "I've updated Sanu's role to developer."
+  },
+  {
+    "role": "user",
+    "content": "Forget Sanu"
+  },
+  {
+    "role": "assistant",
+    "content": "I've forgotten Sanu."
+  },
+  {
+    "role": "user",
+    "content": "Who is Sanu?"
+  },
+  {
+    "role": "assistant",
+    "content": "I don't have any information saved about Sanu."
+  }
+]

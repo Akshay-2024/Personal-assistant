@@ -1,0 +1,270 @@
+
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap");
+
+:root {
+  color-scheme: dark;
+  --bg: #05090e;
+  --panel: #0a121b;
+  --cyan: #57e8ff;
+  --muted: #8ba1b4;
+  --border: rgba(87, 232, 255, 0.2);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: radial-gradient(ellipse at top, #102633 0%, var(--bg) 60%);
+  color: #edfaff;
+  font-family: "DM Sans", sans-serif;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.jarvis-page {
+  min-height: 100vh;
+  padding: 28px 16px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.jarvis-panel {
+  width: 100%;
+  max-width: 760px;
+  padding: 28px;
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  background: rgba(6, 15, 24, 0.88);
+  box-shadow: 0 0 60px rgba(0, 192, 255, 0.08);
+}
+
+.jarvis-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.eyebrow,
+.message-role,
+.jarvis-footer {
+  color: var(--cyan);
+  font-family: "Space Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 2px;
+}
+
+.jarvis-header h1 {
+  margin: 8px 0 4px;
+  font-size: clamp(32px, 7vw, 48px);
+  letter-spacing: 5px;
+}
+
+.subtitle {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.online-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--cyan);
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+}
+
+.online-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #5dffb0;
+  box-shadow: 0 0 12px #5dffb0;
+}
+
+.voice-orb {
+  display: grid;
+  place-items: center;
+  margin: 30px auto 18px;
+  width: 150px;
+  height: 150px;
+  border: 1px solid rgba(87, 232, 255, 0.25);
+  border-radius: 50%;
+  box-shadow: 0 0 35px rgba(87, 232, 255, 0.08),
+    inset 0 0 30px rgba(87, 232, 255, 0.06);
+}
+
+.orb-core {
+  width: 105px;
+  height: 105px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 2px solid var(--cyan);
+  color: var(--cyan);
+  font-size: 34px;
+  background: radial-gradient(circle, #173c4c, #07111a 75%);
+  box-shadow: 0 0 28px rgba(87, 232, 255, 0.2);
+}
+
+.orb-listening {
+  animation: pulse 1s infinite alternate;
+}
+
+@keyframes pulse {
+  from {
+    box-shadow: 0 0 12px rgba(87, 232, 255, 0.3);
+    transform: scale(0.97);
+  }
+  to {
+    box-shadow: 0 0 42px rgba(87, 232, 255, 0.7);
+    transform: scale(1.04);
+  }
+}
+
+.system-status {
+  min-height: 22px;
+  color: var(--muted);
+  text-align: center;
+  font-size: 13px;
+}
+
+.voice-controls {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 18px 0 26px;
+}
+
+.mic-button,
+.secondary-button,
+.chat-form button {
+  border-radius: 12px;
+  padding: 12px 18px;
+  font-weight: 600;
+}
+
+.mic-button,
+.chat-form button {
+  border: 1px solid var(--cyan);
+  background: var(--cyan);
+  color: #041017;
+}
+
+.mic-active {
+  background: #ff6b78;
+  border-color: #ff6b78;
+}
+
+.secondary-button {
+  color: var(--cyan);
+  border: 1px solid var(--border);
+  background: #0d1a25;
+}
+
+.message-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 360px;
+  overflow-y: auto;
+  padding: 4px 2px 18px;
+}
+
+.message {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow-wrap: anywhere;
+}
+
+.message.user {
+  background: rgba(87, 232, 255, 0.07);
+}
+
+.message.assistant {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.message p {
+  margin: 8px 0 0;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.thinking {
+  color: var(--cyan);
+  font-size: 13px;
+}
+
+.chat-form {
+  display: flex;
+  gap: 10px;
+}
+
+.chat-form input {
+  min-width: 0;
+  flex: 1;
+  padding: 13px;
+  color: white;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  outline: none;
+  background: #071019;
+}
+
+.chat-form input:focus {
+  border-color: var(--cyan);
+}
+
+.jarvis-footer {
+  margin-top: 24px;
+  text-align: center;
+  color: #607b8c;
+  font-size: 9px;
+  line-height: 1.8;
+}
+
+@media (max-width: 520px) {
+  .jarvis-page {
+    padding: 12px 8px;
+  }
+
+  .jarvis-panel {
+    padding: 18px 14px;
+    border-radius: 18px;
+  }
+
+  .jarvis-header {
+    flex-direction: column;
+  }
+
+  .chat-form {
+    flex-wrap: wrap;
+  }
+
+  .chat-form input {
+    flex-basis: 100%;
+  }
+
+  .chat-form button {
+    width: 100%;
+  }
+}
