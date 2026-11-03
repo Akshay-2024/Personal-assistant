@@ -1,0 +1,82 @@
+[
+  {
+    "role": "user",
+    "content": "Who are my friends?"
+  },
+  {
+    "role": "assistant",
+    "content": "People you've mentioned: Bahul - a developer."
+  },
+  {
+    "role": "user",
+    "content": "What is my preferred name?"
+  },
+  {
+    "role": "assistant",
+    "content": "Your preferred name is Alex. How can I help you today?"
+  },
+  {
+    "role": "user",
+    "content": "Remember that my friend Sanu is a designer"
+  },
+  {
+    "role": "assistant",
+    "content": "I already have this saved: Sanu - a designer."
+  },
+  {
+    "role": "user",
+    "content": "Remember that my friend Sanu is a designer"
+  },
+  {
+    "role": "assistant",
+    "content": "I already have this saved: Sanu - a designer."
+  },
+  {
+    "role": "user",
+    "content": "Remember that my friend Rahul is a developer"
+  },
+  {
+    "role": "assistant",
+    "content": "I already have this saved: Rahul - a developer."
+  },
+  {
+    "role": "user",
+    "content": "1. Who are my friends?"
+  },
+  {
+    "role": "assistant",
+    "content": "Based on what you've shared, your friends are Bahul, a developer, Sanu, a designer, and Rahul, also a developer."
+  },
+  {
+    "role": "user",
+    "content": "Update Sanu's role to UI designer"
+  },
+  {
+    "role": "assistant",
+    "content": "I've updated Sanu's role to UI designer."
+  },
+  {
+    "role": "user",
+    "content": "Who is Sanu?"
+  },
+  {
+    "role": "assistant",
+    "content": "Sanu - UI designer"
+  },
+  {
+    "role": "user",
+    "content": "Forget Rahul"
+  },
+  {
+    "role": "assistant",
+    "content": "I've forgotten Rahul."
+  },
+  {
+    "role": "user",
+    "content": "1. Who are my friends?"
+  },
+  {
+    "role": "assistant",
+    "content": "Based on what you've shared, your friend is Bahul, a developer, and Sanu, your UI designer."
+  }
+]

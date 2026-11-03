@@ -10,6 +10,7 @@ from pathlib import Path
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from threading import Lock
+
 import sounddevice as sd
 from vosk import Model, KaldiRecognizer, SetLogLevel
 
@@ -118,6 +119,25 @@ def microphone_callback(indata, frames, time_info, status):
     if not stop_event.is_set():
         audio_queue.put(bytes(indata))
 
+def correct_voice_transcript(text: str) -> str:
+    corrections = {
+        "one or more reds": "AmoraWeds",
+        "one or more red": "AmoraWeds",
+        "jar vis": "JARVIS",
+        "ore on": "Orion",
+    }
+
+    corrected = text
+
+    for wrong, right in corrections.items():
+        corrected = re.sub(
+            rf"\b{re.escape(wrong)}\b",
+            right,
+            corrected,
+            flags=re.IGNORECASE,
+        )
+
+    return corrected
 
 def recognition_worker():
     recognizer = KaldiRecognizer(vosk_model, 16000)
@@ -441,6 +461,30 @@ def remember_user_fact(message: str):
             r"([a-z][a-z0-9_-]*)\s+is\s+(.+)$",
         ),
         (
+            "person",
+            r"^([a-z][a-z0-9_-]*)\s+has started working as\s+(.+)$",
+        ),
+        (
+            "person",
+            r"^i recently met someone named\s+"
+            r"([a-z][a-z0-9_-]*)\s+who is\s+(.+)$",
+        ),
+        (
+            "relationship",
+            r"^(?!who\b|what\b|where\b|when\b|why\b|how\b)"
+            r"([a-z][a-z0-9_-]*)\s+is\s+the\s+(.+?)\s+for\s+(.+)$",
+        ),
+        (
+            "relationship",
+            r"^(?:add|assign)\s+([a-z][a-z0-9_-]*)\s+"
+            r"as\s+(.+?)\s+for\s+(.+)$",
+        ),
+        (
+            "relationship_update",
+            r"^change\s+([a-z][a-z0-9_-]*)(?:'s)?\s+role\s+to\s+"
+            r"(.+?)\s+for\s+(.+)$",
+        ),
+        (
             "important_fact",
             r"^(?:remember that|please remember that|don't forget that)\s+(.+)$",
         ),
@@ -474,6 +518,21 @@ def remember_user_fact(message: str):
                     f"{match.group(1).strip()} - "
                     f"{match.group(2).strip()}"
                 )
+
+            elif key == "relationship":
+                matched_value = (
+                    f"{match.group(1).strip()} - "
+                    f"{match.group(2).strip()} - "
+                    f"{match.group(3).strip()}"
+                )
+
+            elif key == "relationship_update":
+                matched_value = (
+                    f"{match.group(1).strip()} - "
+                    f"{match.group(2).strip()} - "
+                    f"{match.group(3).strip()}"
+                )
+
             else:
                 matched_value = match.group(1).strip()
 
@@ -543,6 +602,35 @@ def remember_user_fact(message: str):
                 save_persistent_facts(facts)
                 return True
 
+        # Handle relationship additions and updates.
+        if matched_key in {"relationship", "relationship_update"}:
+            parts = matched_value.split(" - ", 2)
+            person_name = parts[0].casefold()
+            project_name = parts[2].casefold()
+
+            existing_relationship = next(
+                (
+                    fact for fact in facts
+                    if fact["key"] == "relationship"
+                    and fact["value"].split(" - ", 2)[0].casefold()
+                    == person_name
+                    and fact["value"].split(" - ", 2)[2].casefold()
+                    == project_name
+                ),
+                None
+            )
+
+            if existing_relationship:
+                if existing_relationship["value"].casefold() == matched_value.casefold():
+                    return True
+
+                existing_relationship["value"] = matched_value
+                save_persistent_facts(facts)
+                return True
+
+            if matched_key == "relationship_update":
+                return False
+
         # Avoid saving duplicate facts.
         duplicate = any(
             fact["key"] == matched_key
@@ -555,6 +643,9 @@ def remember_user_fact(message: str):
 
     # Save the new fact.
     facts.append({
+        "key": "relationship",
+        "value": matched_value,
+    } if matched_key == "relationship_update" else {
         "key": matched_key,
         "value": matched_value,
     })
@@ -568,10 +659,62 @@ def manage_persistent_memory(message: str):
     """Handle memory summaries, category recall, updates, and deletion."""
     import re
 
+    message = re.sub(r"^\s*\d+[.)]\s*", "", message)
     question = " ".join(message.lower().strip().split())
     question = question.rstrip(".!?")
     original_message = " ".join(message.strip().split())
     facts = load_persistent_facts()
+
+
+    # ---------- Natural-language person corrections ----------
+
+    correction_patterns = [
+        # Example: Actually, Sanu is a graphic designer, not a UI designer.
+        r"^(?:actually,?\s*)?([a-z][a-z0-9_-]*)\s+is\s+(.+?),\s*not\s+.+$",
+
+        # Example: Sanu is now a graphic designer.
+        r"^([a-z][a-z0-9_-]*)\s+is\s+now\s+(.+)$",
+    ]
+
+    for pattern in correction_patterns:
+        correction = re.match(
+            pattern,
+            original_message,
+            re.IGNORECASE
+        )
+
+        if correction:
+            person_name = correction.group(1).casefold()
+            new_role = correction.group(2).strip().rstrip(".!?")
+
+            if not new_role or len(new_role) > 200:
+                return "Please provide valid updated information."
+
+            person = next(
+                (
+                    fact for fact in facts
+                    if fact["key"] == "person"
+                    and fact["value"].split(" - ", 1)[0].strip().casefold()
+                    == person_name
+                ),
+                None
+            )
+
+            if not person:
+                return f"I don't have {person_name.title()} saved."
+
+            person["value"] = (
+                person["value"].split(" - ", 1)[0].strip()
+                + " - " + new_role
+            )
+
+            save_persistent_facts(facts)
+
+            return (
+                f"I've updated {person_name.title()}'s information "
+                f"to {new_role}."
+            )
+
 
     labels = {
         "preferred_name": "Your preferred name",
@@ -694,7 +837,45 @@ def manage_persistent_memory(message: str):
         save_persistent_facts(facts)
         return f"I've updated {person_name.title()}'s role to {new_role}."
 
+        # Remove one person's relationship with a project.
+    relationship_remove = re.match(
+        r"^(?:please )?(?:remove|delete|unassign|forget)\s+"
+        r"([a-z][a-z0-9_-]*)\s+"
+        r"(?:from|in relation to|in the context of)\s+"
+        r"(.+)$",
+        original_message,
+        re.IGNORECASE,
+    )
 
+    if relationship_remove:
+        person_name = relationship_remove.group(1).casefold()
+        project_name = relationship_remove.group(2).strip().rstrip(".!?")
+
+        remaining = [
+            fact for fact in facts
+            if not (
+                fact["key"] == "relationship"
+                and len(fact["value"].split(" - ", 2)) == 3
+                and fact["value"].split(" - ", 2)[0].casefold()
+                == person_name
+                and fact["value"].split(" - ", 2)[2].casefold()
+                == project_name.casefold()
+            )
+        ]
+
+        if len(remaining) == len(facts):
+            return (
+                f"I couldn't find {person_name.title()} "
+                f"working on {project_name}."
+            )
+
+        save_persistent_facts(remaining)
+
+        return (
+            f"I've removed {person_name.title()} "
+            f"from {project_name}. Their personal information is preserved."
+        )
+    
     # Forget one individual person.
     person_forget = re.match(
         r"^(?:please )?(?:forget|delete|remove)\s+"
@@ -831,6 +1012,72 @@ def answer_from_persistent_facts(message: str):
             if matches:
                 return prefix + matches[0]["value"] + "."
 
+        # Answer project relationship questions.
+        relationship_facts = [
+            fact for fact in facts
+            if fact["key"] == "relationship"
+        ]
+
+        # Who is working on a particular project?
+        project_match = re.search(
+            r"(?:who is working on|who works on|who is the team for)\s+(.+?)[?.!]*$",
+            question,
+        )
+
+        if project_match:
+            project_name = project_match.group(1).strip().casefold()
+
+            matches = [
+                fact for fact in relationship_facts
+                if fact["value"].split(" - ", 2)[2].casefold()
+                == project_name
+            ]
+
+            if matches:
+                answers = []
+
+                for fact in matches:
+                    person, role, project = fact["value"].split(" - ", 2)
+                    answers.append(
+                        f"{person} is the {role} for {project}"
+                    )
+
+                return ". ".join(answers) + "."
+
+        # Who has a particular role for a project?
+        role_match = re.search(
+            r"who is the (.+?) for (.+?)[?.!]*$",
+            question,
+        )
+
+        if role_match:
+            requested_role = role_match.group(1).strip().casefold()
+            requested_project = role_match.group(2).strip().casefold()
+
+            for fact in relationship_facts:
+                person, role, project = fact["value"].split(" - ", 2)
+
+                if (
+                    role.casefold() == requested_role
+                    and project.casefold() == requested_project
+                ):
+                    return f"{person} is the {role} for {project}."
+
+        # What project is a person working on?
+        person_match = re.search(
+            r"what project is ([a-z][a-z0-9_-]*) working on",
+            question,
+        )
+
+        if person_match:
+            requested_person = person_match.group(1).casefold()
+
+            for fact in relationship_facts:
+                person, role, project = fact["value"].split(" - ", 2)
+
+                if person.casefold() == requested_person:
+                    return f"{person} is the {role} for {project}."
+            
     # Look for a saved important fact if the question mentions
     # a meaningful word from that fact.
     stop_words = {

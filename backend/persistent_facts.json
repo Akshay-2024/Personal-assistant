@@ -13,7 +13,7 @@
   },
   {
     "key": "person",
-    "value": "Bahul - a developer"
+    "value": "Bahul - a backend developer"
   },
   {
     "key": "preference",
@@ -25,6 +25,18 @@
   },
   {
     "key": "person",
-    "value": "Sanu - UI designer"
+    "value": "Sanu - a graphic designer"
+  },
+  {
+    "key": "person",
+    "value": "Rahul - a photographer"
+  },
+  {
+    "key": "person",
+    "value": "Arjun - a designer"
+  },
+  {
+    "key": "relationship",
+    "value": "Akshay - UI developer - AmoraWeds"
   }
 ]
