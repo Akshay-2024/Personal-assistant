@@ -184,7 +184,7 @@ function speak(text: string) {
 
           setLiveTranscript(transcript);
         } catch {
-          setStatus("Unable to read Vosk transcription.");
+          setStatus("Unable to read speech recognition status.");
         }
       }, 300);
     } catch (error) {
@@ -370,7 +370,7 @@ function speak(text: string) {
         </form>
 
         <footer className="jarvis-footer">
-          VOSK OFFLINE STT · GEMINI AI · LOCAL FRONTEND
+          WHISPER OFFLINE STT · GEMINI AI · LOCAL FRONTEND
         </footer>
       </section>
     </main>

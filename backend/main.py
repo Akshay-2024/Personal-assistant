@@ -12,7 +12,9 @@ from zoneinfo import ZoneInfo
 from threading import Lock
 
 import sounddevice as sd
-from vosk import Model, KaldiRecognizer, SetLogLevel
+import tempfile
+import wave
+from faster_whisper import WhisperModel
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
@@ -80,29 +82,24 @@ app.add_middleware(
     allow_headers=["Content-Type"],
 )
 
-# ---------- Offline Vosk speech recognition ----------
 
-SetLogLevel(-1)
+# ---------- Offline Whisper speech recognition ----------
 
-MODEL_PATH = (
-    Path(__file__).parent
-    / "models"
-    / "vosk-model-small-en-us-0.15"
+WHISPER_MODEL_PATH = Path(__file__).parent / "models" / "whisper"
+
+whisper_model = WhisperModel(
+    "medium.en",
+    device="cpu",
+    compute_type="int8",
+    download_root=str(WHISPER_MODEL_PATH),
 )
 
-if not MODEL_PATH.is_dir():
-    raise RuntimeError(
-        f"Vosk model folder not found: {MODEL_PATH}"
-    )
+MICROPHONE_DEVICE = 1  # Mivi DuoPods i7 microphone
 
-vosk_model = Model(str(MODEL_PATH))
-
-audio_queue = queue.Queue()
-listen_lock = threading.Lock()
-stop_event = threading.Event()
-
+audio_chunks = []
+audio_lock = Lock()
+listen_lock = Lock()
 audio_stream = None
-recognition_thread = None
 
 listen_state = {
     "listening": False,
@@ -114,125 +111,51 @@ listen_state = {
 
 def microphone_callback(indata, frames, time_info, status):
     if status:
-        print("Microphone status:", status)
+        print(f"Microphone status: {status}")
 
-    if not stop_event.is_set():
-        audio_queue.put(bytes(indata))
-
-def correct_voice_transcript(text: str) -> str:
-    corrections = {
-        "one or more reds": "AmoraWeds",
-        "one or more red": "AmoraWeds",
-        "jar vis": "JARVIS",
-        "ore on": "Orion",
-    }
-
-    corrected = text
-
-    for wrong, right in corrections.items():
-        corrected = re.sub(
-            rf"\b{re.escape(wrong)}\b",
-            right,
-            corrected,
-            flags=re.IGNORECASE,
-        )
-
-    return corrected
-
-def recognition_worker():
-    recognizer = KaldiRecognizer(vosk_model, 16000)
-
-    try:
-        while not stop_event.is_set():
-            try:
-                audio_data = audio_queue.get(timeout=0.2)
-            except queue.Empty:
-                continue
-
-            if recognizer.AcceptWaveform(audio_data):
-                result = json.loads(recognizer.Result())
-                text = result.get("text", "").strip()
-
-                if text:
-                    with listen_lock:
-                        current = listen_state["transcript"]
-                        listen_state["transcript"] = (
-                            f"{current} {text}".strip()
-                        )
-                        listen_state["partial"] = ""
-            else:
-                partial = json.loads(
-                    recognizer.PartialResult()
-                ).get("partial", "")
-
-                with listen_lock:
-                    listen_state["partial"] = partial
-
-        final_result = json.loads(recognizer.FinalResult())
-        final_text = final_result.get("text", "").strip()
-
-        if final_text:
-            with listen_lock:
-                current = listen_state["transcript"]
-                listen_state["transcript"] = (
-                    f"{current} {final_text}".strip()
-                )
-                listen_state["partial"] = ""
-
-    except Exception as exc:
-        with listen_lock:
-            listen_state["error"] = str(exc)
-
-    finally:
-        with listen_lock:
-            listen_state["listening"] = False
+    if listen_state["listening"]:
+        with audio_lock:
+            audio_chunks.append(bytes(indata))
 
 
-# ---------- Vosk API routes ----------
+# ---------- Whisper API routes ----------
 
 @app.post("/listen/start")
 def start_listening():
-    global audio_stream, recognition_thread
+    global audio_stream
 
     with listen_lock:
         if listen_state["listening"]:
             return {"ok": True, "message": "Already listening"}
 
-        listen_state["transcript"] = ""
-        listen_state["partial"] = ""
-        listen_state["error"] = None
+        with audio_lock:
+            audio_chunks.clear()
 
-        stop_event.clear()
-
-        while not audio_queue.empty():
-            try:
-                audio_queue.get_nowait()
-            except queue.Empty:
-                break
+        listen_state.update({
+            "listening": False,
+            "transcript": "",
+            "partial": "",
+            "error": None,
+        })
 
         try:
-            stream = sd.RawInputStream(
+            audio_stream = sd.RawInputStream(
                 samplerate=16000,
                 blocksize=4000,
                 dtype="int16",
                 channels=1,
+                device=MICROPHONE_DEVICE,
                 callback=microphone_callback,
             )
 
-            stream.start()
-            audio_stream = stream
-
+            audio_stream.start()
             listen_state["listening"] = True
 
-            recognition_thread = threading.Thread(
-                target=recognition_worker,
-                daemon=True,
-            )
-            recognition_thread.start()
+            return {"ok": True, "message": "Listening started"}
 
         except Exception as exc:
-            listen_state["listening"] = False
             listen_state["error"] = str(exc)
+            listen_state["listening"] = False
 
             if audio_stream is not None:
                 try:
@@ -243,61 +166,110 @@ def start_listening():
             audio_stream = None
             return {"ok": False, "error": str(exc)}
 
-    return {"ok": True, "message": "Listening started"}
-
 
 @app.get("/listen/status")
-def listening_status():
-    with listen_lock:
-        return {
-            "listening": listen_state["listening"],
-            "transcript": listen_state["transcript"],
-            "partial": listen_state["partial"],
-            "error": listen_state["error"],
-        }
+def get_listen_status():
+    return {
+        "listening": listen_state["listening"],
+        "transcript": listen_state["transcript"],
+        "partial": listen_state["partial"],
+        "error": listen_state["error"],
+    }
 
 
 @app.post("/listen/stop")
 def stop_listening():
-    global audio_stream, recognition_thread
-
-    stop_event.set()
-
-    stream = audio_stream
-    audio_stream = None
-
-    if stream is not None:
-        try:
-            stream.stop()
-        except Exception:
-            pass
-
-        try:
-            stream.close()
-        except Exception:
-            pass
-
-    worker = recognition_thread
-
-    if worker is not None and worker.is_alive():
-        worker.join(timeout=3)
-
-    if worker is not None and worker.is_alive():
-        return {
-            "ok": False,
-            "error": "Speech recognition is still stopping. Try again.",
-        }
-
-    recognition_thread = None
+    global audio_stream
 
     with listen_lock:
+        if not listen_state["listening"]:
+            return {
+                "ok": True,
+                "transcript": listen_state["transcript"],
+                "error": listen_state["error"],
+            }
+
         listen_state["listening"] = False
+
+        stream = audio_stream
+        audio_stream = None
+
+        if stream is not None:
+            try:
+                stream.stop()
+            except Exception:
+                pass
+
+            try:
+                stream.close()
+            except Exception:
+                pass
+
+        with audio_lock:
+            recorded_audio = b"".join(audio_chunks)
+            audio_chunks.clear()
+
+    if not recorded_audio:
+        listen_state["error"] = "No audio was recorded."
+        return {
+            "ok": False,
+            "transcript": "",
+            "error": listen_state["error"],
+        }
+
+    recording_path = None
+
+    try:
+        with tempfile.NamedTemporaryFile(
+            suffix=".wav",
+            delete=False,
+            dir=str(Path(__file__).parent),
+        ) as temp_file:
+            recording_path = Path(temp_file.name)
+
+        with wave.open(str(recording_path), "wb") as wav_file:
+            wav_file.setnchannels(1)
+            wav_file.setsampwidth(2)
+            wav_file.setframerate(16000)
+            wav_file.writeframes(recorded_audio)
+
+        segments, info = whisper_model.transcribe(
+            str(recording_path),
+            language="en",
+            beam_size=5,
+            vad_filter=True,
+        )
+
+        transcript = " ".join(
+            segment.text.strip()
+            for segment in segments
+            if segment.text.strip()
+        ).strip()
+
+        listen_state["transcript"] = transcript
+        listen_state["error"] = None
 
         return {
             "ok": True,
-            "transcript": listen_state["transcript"].strip(),
-            "error": listen_state["error"],
+            "transcript": transcript,
+            "error": None,
         }
+
+    except Exception as exc:
+        listen_state["error"] = str(exc)
+
+        return {
+            "ok": False,
+            "transcript": "",
+            "error": str(exc),
+        }
+
+    finally:
+        if recording_path is not None:
+            try:
+                recording_path.unlink(missing_ok=True)
+            except Exception:
+                pass
 
 
 # ---------- Chat request model ----------
@@ -1078,8 +1050,61 @@ def answer_from_persistent_facts(message: str):
                 if person.casefold() == requested_person:
                     return f"{person} is the {role} for {project}."
             
-    # Look for a saved important fact if the question mentions
-    # a meaningful word from that fact.
+        # Handle questions asking about multiple people.
+    people_match = re.search(
+        r"(?:know about|tell me about|information about)\s+(.+?)[?.!]*$",
+        message,
+        re.IGNORECASE,
+    )
+
+    if people_match:
+        requested_text = people_match.group(1).strip()
+
+        requested_people = [
+            name.strip(" \t.,?!")
+            for name in re.split(
+                r"\s+and\s+|,\s*",
+                requested_text,
+                flags=re.IGNORECASE,
+            )
+            if name.strip(" \t.,?!")
+        ]
+
+        if len(requested_people) >= 2:
+            answers = []
+
+            for person_name in requested_people:
+                person_pattern = re.compile(
+                    r"\b" + re.escape(person_name) + r"\b",
+                    re.IGNORECASE,
+                )
+
+                person_facts = [
+                    fact for fact in facts
+                    if person_pattern.search(
+                        fact.get("value", "")
+                    )
+                    or person_pattern.search(
+                        fact.get("key", "")
+                    )
+                ]
+
+                if person_facts:
+                    details = "; ".join(
+                        fact["value"] for fact in person_facts
+                    )
+                    answers.append(
+                        f"{person_name}: {details}"
+                    )
+                else:
+                    answers.append(
+                        f"{person_name}: I don't have any saved "
+                        "information about this person."
+                    )
+
+            return "Here's what I know. " + " ".join(
+                answers
+            )
     stop_words = {
         "what", "when", "where", "which", "who", "why", "how",
         "is", "are", "was", "the", "a", "an", "my", "me", "you",
@@ -1109,7 +1134,13 @@ def answer_from_persistent_facts(message: str):
                     + fact["value"] + "."
                 )
 
-            return "I already have this saved: " + fact["value"] + "."
+            parts = fact["value"].split(" - ", 2)
+
+            if len(parts) == 3:
+                person, role, project = parts
+                return f"{person} is the {role} of {project}."
+
+            return "I remember that " + fact["value"] + "."
 
     return None
 

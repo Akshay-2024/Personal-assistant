@@ -1,19 +1,51 @@
-# Frontend environment files
-frontend/.env
-frontend/.env.*
-!frontend/.env.example
+# Python virtual environments
+venv/
+.venv/
+env/
+whisper_venv/
+backend/whisper_venv/
 
-# Backend environment files
-backend/.env
-backend/.env.*
-!backend/.env.example
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
 
-# Next.js
-frontend/node_modules/
-frontend/.next/
+# Node modules
+node_modules/
 
-# Python
-backend/venv/
-backend/.venv/
-backend/__pycache__/
+# Environment variables
+.env
+.env.local
+.env.production
+
+# Build folders
+.next/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Whisper model weights
+backend/models/whisper/blobs/
+
+# Python virtual environment
+backend/whisper_venv/
+
+# Python cache
+__pycache__/
 *.pyc
+
+# Whisper downloaded models and cache
+backend/models/whisper/
+
+# Python virtual environment
+backend/whisper_venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
